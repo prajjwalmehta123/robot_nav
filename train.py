@@ -6,55 +6,9 @@ from RobotNavEnv import RobotNavEnv
 import torch
 import os
 import numpy as np
+from callbacks import CurriculumCallback
 import wandb
 from wandb.integration.sb3 import WandbCallback
-
-
-class CustomWandbCallback:
-    def __init__(self, check_freq=1000):
-        self.check_freq = check_freq
-        self.n_calls = 0
-
-    def __call__(self, locals_, globals_):
-        self.n_calls += 1
-        if self.n_calls % self.check_freq == 0:
-            # Log episode statistics
-            if locals_['infos']:
-                episode_info = locals_['infos'][0]
-                wandb.log({
-                    "train/episode_reward": episode_info.get('episode', {}).get('r', 0),
-                    "train/episode_length": episode_info.get('episode', {}).get('l', 0),
-                    "current_difficulty": locals_['self'].env.get_attr('difficulty')[0],
-                })
-        return True
-
-
-class CurriculumCallback:
-    def __init__(self, eval_env, difficulty_threshold=0.8, check_freq=10000):
-        self.eval_env = eval_env
-        self.difficulty_threshold = difficulty_threshold
-        self.check_freq = check_freq
-        self.n_calls = 0
-
-    def __call__(self, locals_, globals_):
-        self.n_calls += 1
-        if self.n_calls % self.check_freq == 0:
-            mean_success = np.mean([info['is_success'] for info in locals_['infos']])
-
-            if mean_success > self.difficulty_threshold:
-                current_difficulty = self.eval_env.get_attr('difficulty')[0]
-                new_difficulty = min(current_difficulty + 1, 5)
-                print(f"\nIncreasing difficulty to {new_difficulty}")
-                self.eval_env.set_attr('difficulty', new_difficulty)
-
-                # Log difficulty change to wandb
-                wandb.log({
-                    "curriculum/difficulty": new_difficulty,
-                    "curriculum/success_rate": mean_success
-                })
-
-        return True
-
 
 def setup_cuda():
     """
@@ -99,8 +53,7 @@ def train_robot(config=None):
             "max_difficulty": 5,
         }
     )
-    device = setup_cuda()
-
+    setup_cuda()
     # Create log directory with wandb run name
     log_dir = f"logs/{run.name}/"
     os.makedirs(log_dir, exist_ok=True)
@@ -122,20 +75,27 @@ def train_robot(config=None):
         render=False
     )
 
-    curriculum_callback = CurriculumCallback(eval_env)
+    # Initialize the fixed curriculum callback
+    curriculum_callback = CurriculumCallback(
+        eval_env=eval_env,
+        difficulty_threshold=0.8,
+        check_freq=10000,
+        verbose=1
+    )
+
     wandb_callback = WandbCallback(
         gradient_save_freq=100,
         model_save_path=f"{log_dir}/checkpoints",
         verbose=2,
     )
-    custom_wandb_callback = CustomWandbCallback()
 
     callback = CallbackList([
         eval_callback,
         curriculum_callback,
-        wandb_callback,
-        custom_wandb_callback
+        wandb_callback
     ])
+
+    # Initialize model
     model = SAC(
         "MlpPolicy",
         env,
