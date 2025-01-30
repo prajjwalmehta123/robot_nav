@@ -3,6 +3,7 @@ from stable_baselines3.common.vec_env import DummyVecEnv, VecNormalize
 from stable_baselines3.common.callbacks import EvalCallback, CallbackList
 from stable_baselines3.common.monitor import Monitor
 from RobotNavEnv import RobotNavEnv
+import torch
 import os
 import numpy as np
 import wandb
@@ -55,6 +56,25 @@ class CurriculumCallback:
         return True
 
 
+def setup_cuda():
+    """
+    Set up CUDA devices and return the appropriate device for training.
+    Returns:
+        torch.device: The device to use for training
+    """
+    if torch.cuda.is_available():
+        n_cuda_devices = torch.cuda.device_count()
+        print(f"Found {n_cuda_devices} CUDA device(s)")
+        os.environ["PYTORCH_CUDA_ALLOC_CONF"] = "max_split_size_mb:512"
+        device = torch.device("cuda:9")
+        print(f"Using CUDA device: {torch.cuda.get_device_name(0)}")
+    else:
+        print("No CUDA devices available, using CPU")
+        device = torch.device("cpu")
+
+    return device
+
+
 def make_env(difficulty=0, eval_env=False):
     def _init():
         env = RobotNavEnv(render_mode=None, difficulty=difficulty)
@@ -79,6 +99,7 @@ def train_robot(config=None):
             "max_difficulty": 5,
         }
     )
+    device = setup_cuda()
 
     # Create log directory with wandb run name
     log_dir = f"logs/{run.name}/"
