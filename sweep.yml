@@ -1,0 +1,16 @@
+program: train.py
+method: bayes
+metric:
+  name: eval/mean_reward
+  goal: maximize
+parameters:
+  learning_rate:
+    min: 1e-4
+    max: 1e-3
+    distribution: uniform
+  batch_size:
+    values: [128, 256, 512]
+  buffer_size:
+    values: [500000, 1000000, 2000000]
+  learning_starts:
+    values: [5000, 10000, 20000]
