@@ -1,0 +1,24 @@
+name: robotics-nav
+channels:
+  - conda-forge
+  - defaults
+dependencies:
+  - python=3.10  # Updated to 3.10 for better compatibility
+  - numpy>=1.23.5
+  - opencv>=4.7.0
+  - matplotlib>=3.7.1
+  - jupyterlab>=3.6.3
+  - pip>=23.1.2
+  - scipy>=1.10.1
+  - pillow>=9.5.0
+  - pyyaml>=6.0
+  - tensorboard>=2.13.0
+  - pytorch>=2.0.1  # CPU-only for Mac
+  - pip:
+      - "torchvision>=0.15.2"
+      - "stable-baselines3>=2.0.0"
+      - "gymnasium>=0.26.2"  # Updated from gym to gymnasium
+      - "ultralytics>=8.0.0"
+      - "pybullet>=3.2.5"  # Moved to pip install
+      - "opencv-contrib-python>=4.7.0.72"
+      - "pygame>=2.3.0"
