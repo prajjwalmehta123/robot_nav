@@ -72,13 +72,13 @@ class NavigationVisualizer:
 
             # Get action from model
             action, _ = self.model.predict(obs, deterministic=True)
-
+            print(action)
             # Execute action
             obs, reward, terminated, truncated, _ = self.env.step(action)
             episode_reward += reward
             done = terminated or truncated
 
-            time.sleep(0.01)  # Slow down visualization
+            time.sleep(0.1)  # Slow down visualization
 
         return episode_reward, terminated
 
@@ -96,9 +96,8 @@ class NavigationVisualizer:
 
 
 def main():
-    model_path = "logs/best_model/best_model.zip"
+    model_path = "../model.zip"
     visualizer = NavigationVisualizer(model_path)
-
     try:
         visualizer.run_visualization()
     except KeyboardInterrupt:
