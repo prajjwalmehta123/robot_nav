@@ -41,7 +41,15 @@ class CurriculumCallback(BaseCallback):
 
                 wandb.log({
                     "curriculum/difficulty": new_difficulty,
-                    "curriculum/success_rate": success_rate
+                    "curriculum/success_rate": success_rate,
+                    "curriculum/episode_count": len(self.ep_info_buffer),
+                    "training/mean_reward": np.mean(
+                        [r for rewards in self.training_env.get_attr('rewards') for r in rewards]),
+                    "training/success_rate": success_rate,
+                    "training/episode_length": np.mean(
+                        [len(rewards) for rewards in self.training_env.get_attr('rewards')]),
+                    "training/collision_rate": np.mean([info['collision'] for info in recent_episodes]),
+                    "training/min_distance": np.mean([info['distance_to_target'] for info in recent_episodes])
                 })
 
             self.ep_info_buffer = []

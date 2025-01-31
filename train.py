@@ -100,7 +100,14 @@ def train_robot(config=None):
         eval_freq=10000,
         n_eval_episodes=10,
         deterministic=True,
-        render=False
+        render=False,
+        callback_after_eval= lambda locals_, globals_: wandb.log({
+            "eval/mean_reward": locals_["mean_reward"],
+            "eval/success_rate": np.mean([ep_info["is_success"] for ep_info in locals_["eval_info"]]),
+            "eval/episode_length": np.mean([ep_info["episode_length"] for ep_info in locals_["eval_info"]]),
+            "eval/collision_rate": np.mean([ep_info["collision"] for ep_info in locals_["eval_info"]]),
+            "eval/min_distance": np.mean([ep_info["distance_to_target"] for ep_info in locals_["eval_info"]])
+        })
     )
 
     curriculum_callback = CurriculumCallback(
