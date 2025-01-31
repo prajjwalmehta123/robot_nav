@@ -67,7 +67,7 @@ def train_robot(config=None):
                 }
             },
             "checkpoint_freq": 100000,  # Save every 100k steps
-            "max_no_improvement_evals": 5,  # Early stopping patience
+            "max_no_improvement_evals": 10,  # Early stopping patience
         }
     )
 
@@ -148,10 +148,10 @@ def setup_callbacks(env, eval_env, log_dir, config):
 
     curriculum_callback = CurriculumCallback(
         eval_env=eval_env,
-        difficulty_threshold=0.85,
-        difficulty_decrease_threshold=0.3,
-        check_freq=10000,
-        min_episodes=30,
+        difficulty_threshold=0.75,
+        difficulty_decrease_threshold=0.4,
+        check_freq=20000,
+        min_episodes=50,
         verbose=1
     )
 
@@ -250,11 +250,14 @@ def cleanup_training(model, env, log_dir):
     try:
         # Save final model state
         model.save(f"{log_dir}/final_model")
-        # Save optimizer state
-        torch.save(
-            model.policy.optimizer.state_dict(),
-            f"{log_dir}/final_model_optimizer.pth"
-        )
+
+        # Only save optimizer state if available
+        if hasattr(model.policy, "optimizer"):
+            torch.save(
+                model.policy.optimizer.state_dict(),
+                f"{log_dir}/final_model_optimizer.pth"
+            )
+
         # Save normalization statistics
         env.save(f"{log_dir}/vec_normalize.pkl")
 

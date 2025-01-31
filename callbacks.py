@@ -30,17 +30,20 @@ class CurriculumCallback(BaseCallback):
 
     def _on_step(self) -> bool:
         self.n_calls += 1
-        rewards = [rewards for rewards in self.training_env.get_attr('rewards')]
         for env_idx in range(self.training_env.num_envs):
-            # Get episode info from each sub-environment
-            ep_infos = self.training_env.env_method("get_episode_info_buffer", indices=env_idx)
-            for info in ep_infos[0]:
-                self.ep_info_buffer.append({
-                    'is_success': info.get('is_success', False),
-                    'collision': info.get('collision', False),
-                    'distance_to_target': info.get('distance_to_target', 0.0),
-                    'timesteps': self.n_calls - self.last_difficulty_change
-                })
+            try:
+                ep_infos = self.training_env.env_method("get_episode_info_buffer", indices=env_idx)
+                for info in ep_infos[0]:
+                    self.ep_info_buffer.append({
+                        'is_success': info.get('is_success', False),
+                        'collision': info.get('collision', False),
+                        'distance_to_target': info.get('distance_to_target', 0.0),
+                        'timesteps': self.n_calls - self.last_difficulty_change
+                    })
+            except AttributeError:
+                if self.verbose > 0:
+                    print("Warning: Failed to collect episode info - check Monitor wrapper")
+                continue
 
         # Check if we should evaluate difficulty adjustment
         if (self.n_calls % self.check_freq == 0 and
@@ -94,6 +97,8 @@ class CurriculumCallback(BaseCallback):
             avg_distance
     ):
         """Log detailed metrics about difficulty changes."""
+        print(f"\nBuffer size: {len(self.ep_info_buffer)}")
+        print(f"Recent success rates: {[ep['is_success'] for ep in self.ep_info_buffer[-5:]]}")
         if self.verbose > 0:
             change_type = "Increasing" if new_diff > old_diff else "Decreasing"
             print(f"\n{change_type} difficulty from {old_diff:.1f} to {new_diff:.1f}")

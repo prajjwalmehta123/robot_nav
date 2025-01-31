@@ -235,7 +235,10 @@ class RobotNavEnv(gym.Env):
 
     def _add_obstacles(self):
         for obs_id in self.obstacle_ids:
-            p.removeBody(obs_id)
+            try:
+                p.removeBody(obs_id)
+            except p.error.PhysicsClientError:
+                continue
         self.obstacle_ids.clear()
         n_obstacles = int(self.difficulty) + 1
         min_spacing = max(1.0, 1.8 - (self.difficulty * 0.1))
