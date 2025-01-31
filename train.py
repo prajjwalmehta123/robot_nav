@@ -42,18 +42,18 @@ def train_robot(config=None):
         project="robot-navigation",
         config={
             "algorithm": "SAC",
-            "learning_rate": 3e-4,
-            "batch_size": 2048,
+            "learning_rate": 1e-4,
+            "batch_size": 1024,
             "buffer_size": 1000000,
             "learning_starts": 25000,
             "train_freq": 1,
-            "gradient_steps": 1,
+            "gradient_steps": 2,
             "ent_coef": "auto",
             "total_timesteps": 4_000_000,
             "policy_kwargs": {
                 "net_arch": {
-                    "pi": [512, 256],
-                    "qf": [512, 256]
+                    "pi": [512, 512, 256],
+                    "qf": [512, 512, 256]
                 },
                 "optimizer_kwargs": {
                     "weight_decay": 1e-5
@@ -100,19 +100,12 @@ def train_robot(config=None):
         eval_freq=10000,
         n_eval_episodes=10,
         deterministic=True,
-        render=False,
-        callback_after_eval= lambda locals_, globals_: wandb.log({
-            "eval/mean_reward": locals_["mean_reward"],
-            "eval/success_rate": np.mean([ep_info["is_success"] for ep_info in locals_["eval_info"]]),
-            "eval/episode_length": np.mean([ep_info["episode_length"] for ep_info in locals_["eval_info"]]),
-            "eval/collision_rate": np.mean([ep_info["collision"] for ep_info in locals_["eval_info"]]),
-            "eval/min_distance": np.mean([ep_info["distance_to_target"] for ep_info in locals_["eval_info"]])
-        })
+        render=False
     )
 
     curriculum_callback = CurriculumCallback(
         eval_env=eval_env,
-        difficulty_threshold=0.7,
+        difficulty_threshold=0.85,
         check_freq=10000,
         verbose=1
     )

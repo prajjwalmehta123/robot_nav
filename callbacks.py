@@ -31,7 +31,7 @@ class CurriculumCallback(BaseCallback):
 
             if success_rate > self.difficulty_threshold:
                 difficulty = self.training_env.get_attr('difficulty')[0]
-                new_difficulty = min(difficulty + 1, 5)
+                new_difficulty = min(difficulty + 0.5, 5)
 
                 if self.verbose > 0:
                     print(f"\nIncreasing difficulty to {new_difficulty}")

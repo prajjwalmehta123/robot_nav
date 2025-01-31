@@ -145,11 +145,10 @@ class RobotNavEnv(gym.Env):
         # Obstacle sensitivity increases with difficulty
         safe_distance = 1.0 - (self.difficulty * 0.1)
         if min_obstacle_distance < safe_distance:
-            penalty_factor = 2.0 + (self.difficulty * 0.5)
-            obstacle_reward = -penalty_factor * (safe_distance - min_obstacle_distance)
+            obstacle_reward = 0.5 * min_obstacle_distance
 
         if self._check_collision():
-            return -100 * (1 + self.difficulty * 0.2)
+            return -150 * (1 + self.difficulty * 0.3)
 
         if distance_to_target < 0.5:
             return 100 + (self.difficulty * 20)
@@ -157,7 +156,7 @@ class RobotNavEnv(gym.Env):
         total_reward = distance_reward + obstacle_reward
 
         action_smoothness = -np.sum(np.abs(self.current_action - self.prev_action))
-        smoothness_factor = 0.1 * (1 + self.difficulty * 0.2)
+        smoothness_factor = 0.3 * (1 + self.difficulty * 0.2)
         total_reward += smoothness_factor * action_smoothness
 
         return total_reward
@@ -232,10 +231,10 @@ class RobotNavEnv(gym.Env):
 
     def _add_obstacles(self):
         # Number of obstacles increases with difficulty
-        n_obstacles = self.difficulty + 2  # 2 obstacles at level 0, up to 7 at level 5
+        n_obstacles = self.difficulty + 1
 
         # Minimum spacing decreases with difficulty
-        min_spacing = 1.5 - (self.difficulty * 0.1)  # From 1.5 down to 1.0
+        min_spacing = 1.8 - (self.difficulty * 0.1)
 
         obstacles = []
         for _ in range(n_obstacles):
