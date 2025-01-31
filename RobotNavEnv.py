@@ -78,7 +78,7 @@ class RobotNavEnv(gym.Env):
         return observation, info
 
     def step(self, action):
-        self.prev_action = self.current_action  # Store current as previous
+        self.prev_action = self.current_action
         self.current_action = action
         self.current_step += 1
         linear_vel, angular_vel = action
@@ -91,9 +91,17 @@ class RobotNavEnv(gym.Env):
         reward = self._compute_reward()
         terminated = self._is_terminated()
         truncated = self.current_step >= self.max_steps
-        if terminated:
-            print("Terminated flag is True!")
-        info = {}
+
+        robot_pos, _ = p.getBasePositionAndOrientation(self.robot_id)
+        distance_to_target = np.linalg.norm(
+            np.array([robot_pos[0], robot_pos[1]]) - self.target_pos
+        )
+
+        info = {
+            'is_success': distance_to_target < 0.5,
+            'collision': self._check_collision(),
+            'distance_to_target': distance_to_target
+        }
         return observation, reward, terminated, truncated, info
 
     def _get_observation(self):

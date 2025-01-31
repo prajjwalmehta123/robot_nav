@@ -12,21 +12,26 @@ from wandb.integration.sb3 import WandbCallback
 
 def setup_cuda():
     if torch.cuda.is_available():
-        n_cuda_devices = torch.cuda.device_count()
-        print(f"Found {n_cuda_devices} CUDA device(s)")
-        device = torch.device("cuda:0")  # Use first available GPU
-        print(f"Using CUDA device: {torch.cuda.get_device_name(0)}")
-    else:
-        print("No CUDA devices available, using CPU")
-        device = torch.device("cpu")
-    return device
+        device = torch.device("cuda:0")
+        torch.cuda.set_device(device)
+        torch.cuda.empty_cache()
 
-def make_env(difficulty=0, eval_env=False):
+        torch.backends.cudnn.benchmark = True
+        os.environ["PYTORCH_CUDA_ALLOC_CONF"] = "max_split_size_mb:512"
+
+        print(f"Using GPU: {torch.cuda.get_device_name(0)}")
+        print(f"Memory Usage: {torch.cuda.memory_allocated() / 1e9:.2f}GB")
+        return device
+    return torch.device("cpu")
+
+
+def make_env(difficulty=0, eval_env=False, seed=0):
     def _init():
         env = RobotNavEnv(
             render_mode=None,
             difficulty=difficulty
         )
+        env.reset(seed=seed)
         env = Monitor(env)
         return env
     return _init
@@ -37,34 +42,35 @@ def train_robot(config=None):
         project="robot-navigation",
         config={
             "algorithm": "SAC",
-            "learning_rate": 1e-4,  # Reduced learning rate for stability
-            "batch_size": 512,      # Increased batch size
-            "buffer_size": 2000000, # Larger replay buffer
-            "learning_starts": 25000, # More initial random actions
+            "learning_rate": 3e-4,
+            "batch_size": 2048,
+            "buffer_size": 1000000,
+            "learning_starts": 25000,
             "train_freq": 1,
             "gradient_steps": 1,
             "ent_coef": "auto",
-            "total_timesteps": 4_000_000,  # Doubled training time
-            "initial_difficulty": 0,
-            "max_difficulty": 5,
+            "total_timesteps": 4_000_000,
             "policy_kwargs": {
                 "net_arch": {
-                    "pi": [512, 512, 256],  # Wider policy network
-                    "qf": [512, 512, 256]   # Wider Q-function network
+                    "pi": [512, 256],
+                    "qf": [512, 256]
+                },
+                "optimizer_kwargs": {
+                    "weight_decay": 1e-5
                 }
             }
         }
     )
 
     # Setup device
-    device = setup_cuda()
+    device =  setup_cuda()
 
     # Create log directory
     log_dir = f"logs/{run.name}/"
     os.makedirs(log_dir, exist_ok=True)
 
     # Create environments
-    env = DummyVecEnv([make_env(difficulty=0)])
+    env = DummyVecEnv([make_env(difficulty=0, seed=i) for i in range(4)])
     env = VecNormalize(
         env,
         norm_obs=True,
@@ -73,16 +79,18 @@ def train_robot(config=None):
         clip_reward=10.
     )
 
-    # Create evaluation environment at slightly higher difficulty
     eval_env = DummyVecEnv([make_env(difficulty=0, eval_env=True)])
     eval_env = VecNormalize(
         eval_env,
-        norm_obs=True,
-        norm_reward=True,
-        clip_obs=10.,
-        clip_reward=10.,
-        training=False  # Don't update normalization stats during eval
+        norm_obs=env.norm_obs,
+        norm_reward=env.norm_reward,
+        gamma=env.gamma,
+        clip_obs=env.clip_obs,
+        clip_reward=env.clip_reward,
+        training=False
     )
+    eval_env.obs_rms = env.obs_rms
+    eval_env.ret_rms = env.ret_rms
 
     # Create callbacks
     eval_callback = EvalCallback(
@@ -97,13 +105,14 @@ def train_robot(config=None):
 
     curriculum_callback = CurriculumCallback(
         eval_env=eval_env,
-        difficulty_threshold=0.7,  # Reduced threshold
+        difficulty_threshold=0.7,
         check_freq=10000,
         verbose=1
     )
 
     wandb_callback = WandbCallback(
         gradient_save_freq=100,
+        model_save_freq=10000,
         model_save_path=f"{log_dir}/checkpoints",
         verbose=2,
     )
@@ -114,7 +123,6 @@ def train_robot(config=None):
         wandb_callback
     ])
 
-    # Initialize model with improved parameters
     model = SAC(
         "MlpPolicy",
         env,
@@ -130,7 +138,6 @@ def train_robot(config=None):
         device=device,
         tensorboard_log=f"{log_dir}/tensorboard/"
     )
-
     # Train the model
     try:
         model.learn(
