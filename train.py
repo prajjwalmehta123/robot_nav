@@ -1,11 +1,12 @@
 import glob
-from datetime import time
+from datetime import datetime
 
 from stable_baselines3 import SAC
 from stable_baselines3.common.vec_env import DummyVecEnv, VecNormalize
 from stable_baselines3.common.callbacks import EvalCallback, CallbackList, CheckpointCallback, BaseCallback
 from stable_baselines3.common.monitor import Monitor
 from stable_baselines3.common.evaluation import evaluate_policy
+from stable_baselines3.common.monitor import Monitor
 from RobotNavEnv import RobotNavEnv
 import torch
 import os
@@ -36,7 +37,7 @@ def make_env(difficulty=0, eval_env=False, seed=0):
             difficulty=difficulty
         )
         env.reset(seed=seed)
-        env = Monitor(env)
+        env = CustomMonitor(env)
         return env
     return _init
 
@@ -74,7 +75,7 @@ def train_robot(config=None):
     device = setup_cuda()
 
     # Create log directory with timestamp
-    timestamp = time.strftime("%Y%m%d-%H%M%S")
+    timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
     log_dir = f"logs/{run.name}_{timestamp}/"
     os.makedirs(log_dir, exist_ok=True)
 
@@ -305,6 +306,22 @@ class EarlyStoppingCallback(EvalCallback):  # Inherit from EvalCallback
                 print(f"Early stopping triggered after {self.no_improvement_count} evaluations without improvement.")
             return False
         return True
+
+class CustomMonitor(Monitor):
+    def __init__(self, env, filename=None, allow_early_resets=False, reset_keywords=()):
+        super().__init__(env, filename, allow_early_resets, reset_keywords)
+        self.episode_info_buffer = []
+
+    def step(self, action):
+        observation, reward, terminated, truncated, info = super().step(action)
+        if terminated or truncated:
+            self.episode_info_buffer.append(info.copy())
+        return observation, reward, terminated, truncated, info
+
+    def get_episode_info_buffer(self):
+        buffer = self.episode_info_buffer.copy()
+        self.episode_info_buffer = []
+        return buffer
 
 if __name__ == "__main__":
     wandb.login()
