@@ -21,29 +21,33 @@ class RobotNavEnv(gym.Env):
         )
         self.render_mode = render_mode
         self.client = None
+        self._setup_simulation()
         self.max_steps = 1000
         self.current_step = 0
         self.target_pos = None
         self.robot_id = None
+        self.obstacle_ids = []
+        self.debug_items = []
         self.left_wheel_joints = [6, 7]
         self.right_wheel_joints = [2, 3]
         self.current_action = np.zeros(2)
         self.prev_action = np.zeros(2)
         self.difficulty = difficulty
-        self._setup_simulation()
 
     def _setup_simulation(self):
-        if self.client is not None:
-            p.disconnect(self.client)
+        try:
+            if self.client is not None:
+                try:
+                    p.disconnect(self.client)
+                except p.error.ExperimentalFeatureException:
+                    pass
+            self.client = p.connect(p.GUI if self.render_mode == "human" else p.DIRECT)
+            p.setAdditionalSearchPath(pybullet_data.getDataPath())
+            p.setGravity(0, 0, -9.81)
+            p.setRealTimeSimulation(0)
 
-        if self.render_mode == "human":
-            self.client = p.connect(p.GUI)
-        else:
-            self.client = p.connect(p.DIRECT)
-
-        p.setAdditionalSearchPath(pybullet_data.getDataPath())
-        p.setGravity(0, 0, -9.81)
-        p.setRealTimeSimulation(0)
+        except p.error.ExperimentalFeatureException as e:
+            raise RuntimeError(f"Failed to setup PyBullet simulation: {e}")
 
     def reset(self, seed=None, options=None):
         super().reset(seed=seed)
@@ -145,7 +149,7 @@ class RobotNavEnv(gym.Env):
         # Obstacle sensitivity increases with difficulty
         safe_distance = 1.0 - (self.difficulty * 0.1)
         if min_obstacle_distance < safe_distance:
-            obstacle_reward = 0.5 * min_obstacle_distance
+            obstacle_reward = -1.0 * (safe_distance - min_obstacle_distance)
 
         if self._check_collision():
             return -150 * (1 + self.difficulty * 0.3)
@@ -230,49 +234,62 @@ class RobotNavEnv(gym.Env):
             )
 
     def _add_obstacles(self):
-        # Number of obstacles increases with difficulty
-        n_obstacles = self.difficulty + 1
-
-        # Minimum spacing decreases with difficulty
-        min_spacing = 1.8 - (self.difficulty * 0.1)
-
+        for obs_id in self.obstacle_ids:
+            p.removeBody(obs_id)
+        self.obstacle_ids.clear()
+        n_obstacles = int(self.difficulty) + 1
+        min_spacing = max(1.0, 1.8 - (self.difficulty * 0.1))
         obstacles = []
+        max_attempts =100
         for _ in range(n_obstacles):
             valid_position = False
             attempts = 0
-            while not valid_position and attempts < 50:
+            while not valid_position and attempts < max_attempts:
                 attempts += 1
                 pos = np.random.uniform(-3, 3, size=3)
                 pos[2] = 0.5
-
-                # Check distance from robot
-                valid_position = True
-                robot_dist = np.linalg.norm(pos[:2])
-                if robot_dist < min_spacing:
-                    valid_position = False
-                    continue
-
-                # Check distance from target
-                target_dist = np.linalg.norm(pos[:2] - self.target_pos)
-                if target_dist < min_spacing:
-                    valid_position = False
-                    continue
-
-                # Check distance from other obstacles
-                for obs_pos in obstacles:
-                    if np.linalg.norm(pos[:2] - obs_pos[:2]) < min_spacing:
-                        valid_position = False
-                        break
-
-                if valid_position:
+                if self._is_valid_obstacle_position(pos, obstacles, min_spacing):
+                    valid_position = True
                     obstacles.append(pos)
-                    # Obstacle size increases with difficulty
-                    scale = 0.5 + (self.difficulty * 0.1)  # From 0.5 to 1.0
-                    p.loadURDF("cube.urdf", basePosition=pos, globalScaling=scale)
+                    scale = min(1.0, 0.5 + (self.difficulty * 0.1))
+                    obs_id = p.loadURDF("cube.urdf", basePosition=pos, globalScaling=scale)
+                    self.obstacle_ids.append(obs_id)
+
+            if attempts >= max_attempts:
+                print(f"Warning: Could not place obstacle {len(obstacles) + 1}/{n_obstacles}")
+
+    def _is_valid_obstacle_position(self, pos, obstacles, min_spacing):
+        robot_pos = np.array(p.getBasePositionAndOrientation(self.robot_id)[0])
+        if np.linalg.norm(pos[:2] - robot_pos[:2]) < min_spacing:
+            return False
+        if np.linalg.norm(pos[:2] - self.target_pos) < min_spacing:
+            return False
+        for obs_pos in obstacles:
+            if np.linalg.norm(pos[:2] - obs_pos[:2]) < min_spacing:
+                return False
+        return True
+
 
     def close(self):
         if self.client is not None:
-            p.disconnect(self.client)
+            try:
+                # Clean up debug items
+                for item in self.debug_items:
+                    p.removeUserDebugItem(item)
+                self.debug_items.clear()
+
+                # Remove all objects
+                for obs_id in self.obstacle_ids:
+                    p.removeBody(obs_id)
+                if self.robot_id is not None:
+                    p.removeBody(self.robot_id)
+
+                # Disconnect client
+                p.disconnect(self.client)
+                self.client = None
+
+            except p.error.ExperimentalFeatureException as e:
+                print(f"Warning: Error during cleanup: {e}")
 
 
 def test_environment():
