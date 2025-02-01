@@ -37,7 +37,7 @@ def make_env(difficulty=0, eval_env=False, seed=0):
             difficulty=difficulty
         )
         env.reset(seed=seed)
-        env = CustomMonitor(env)
+        env = CustomMonitor(env,allow_early_resets=True)
         return env
     return _init
 
@@ -332,7 +332,7 @@ class EarlyStoppingCallback(EvalCallback):
         return True
 
 class CustomMonitor(Monitor):
-    def __init__(self, env, filename=None, allow_early_resets=False, reset_keywords=()):
+    def __init__(self, env, filename=None, allow_early_resets=True, reset_keywords=()):
         super().__init__(env, filename, allow_early_resets, reset_keywords)
         self.episode_info_buffer = []
 
