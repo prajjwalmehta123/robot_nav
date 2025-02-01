@@ -48,40 +48,46 @@ def train_robot(config=None):
         project="robot-navigation",
         config={
             "algorithm": "SAC",
-            "learning_rate": 3e-4,  # Adjusted for better initial learning
-            "batch_size": 256,      # Reduced batch size for better initial training
+            "learning_rate": 3e-4,
+            "batch_size": 256,
             "buffer_size": 1000000,
-            "learning_starts": 5000, # Reduced to start learning earlier
-            "train_freq": (1, "episode"),  # Train every episode
+            "learning_starts": 5000,
+            "train_freq": 1,
             "gradient_steps": 1,
-            "ent_coef": "auto_0.1",  # Start with higher entropy for exploration
+            "ent_coef": "auto",
             "total_timesteps": 4_000_000,
-            "tau": 0.02,  # Slower target network update
-            "gamma": 0.98,  # Slightly reduced discount factor
+            "tau": 0.02,
+            "gamma": 0.98,
             "policy_kwargs": {
                 "net_arch": {
-                    "pi": [256, 256],  # Simplified network architecture
+                    "pi": [256, 256],
                     "qf": [256, 256]
                 },
-                "optimizer_class": torch.optim.AdamW,  # Using AdamW
                 "optimizer_kwargs": {
                     "weight_decay": 1e-5,
                     "eps": 1e-5
                 }
             },
             "checkpoint_freq": 50000,
-            "max_no_improvement_evals": 50,  # Increased patience
+            "max_no_improvement_evals": 50,
         }
     )
 
+    # Setup device
     device = setup_cuda()
+
+    # Create log directory
     timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
     log_dir = f"logs/{run.name}_{timestamp}/"
     os.makedirs(log_dir, exist_ok=True)
 
-    # Create environments with modified parameters
+    # Create environments
     env, eval_env = create_envs(log_dir, run.config)
+
+    # Setup callbacks
     callbacks = setup_callbacks(env, eval_env, log_dir, run.config)
+
+    # Initialize or load model
     model = load_or_create_model(env, device, log_dir, run.config)
 
     try:
@@ -101,7 +107,7 @@ def train_robot(config=None):
 
 def create_envs(log_dir, config):
     """Create training and eval environments with improved normalization."""
-    env = DummyVecEnv([make_env(difficulty=0, seed=i) for i in range(2)])  # Reduced parallel envs
+    env = DummyVecEnv([make_env(difficulty=0, seed=i) for i in range(2)])
     env = VecNormalize(
         env,
         norm_obs=True,
@@ -109,14 +115,14 @@ def create_envs(log_dir, config):
         clip_obs=10.,
         clip_reward=10.,
         gamma=config.gamma,
-        epsilon=1e-8  # Added epsilon for numerical stability
+        epsilon=1e-8
     )
 
     eval_env = DummyVecEnv([make_env(difficulty=0, eval_env=True)])
     eval_env = VecNormalize(
         eval_env,
         norm_obs=True,
-        norm_reward=False,  # Don't normalize rewards for evaluation
+        norm_reward=False,
         gamma=config.gamma,
         training=False
     )
@@ -126,6 +132,7 @@ def create_envs(log_dir, config):
     eval_env.ret_rms = env.ret_rms
 
     return env, eval_env
+
 
 def setup_callbacks(env, eval_env, log_dir, config):
     """Setup training callbacks with improved parameters."""
@@ -200,7 +207,7 @@ def load_or_create_model(env, device, log_dir, config):
     return model
 
 
-def create_new_model(env, device, config,log_dir):
+def create_new_model(env, device, config, log_dir):
     """Create a new SAC model with proper configuration."""
     return SAC(
         "MlpPolicy",
@@ -210,12 +217,20 @@ def create_new_model(env, device, config,log_dir):
         batch_size=config.batch_size,
         buffer_size=config.buffer_size,
         learning_starts=config.learning_starts,
-        train_freq=config.train_freq,
-        gradient_steps=config.gradient_steps,
-        ent_coef=config.ent_coef,
-        policy_kwargs=config.policy_kwargs,
+        train_freq=1,
+        gradient_steps=1,
+        ent_coef="auto",
+        tau=0.02,
+        gamma=0.98,
+        policy_kwargs={
+            "net_arch": dict(pi=[256, 256], qf=[256, 256]),
+            "optimizer_kwargs": dict(
+                weight_decay=1e-5,
+                eps=1e-5
+            )
+        },
         device=device,
-        tensorboard_log=f"{log_dir}/tensorboard/",
+        tensorboard_log=f"{log_dir}/tensorboard/"
     )
 
 
