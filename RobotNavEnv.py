@@ -32,6 +32,7 @@ class RobotNavEnv(gym.Env):
         self.right_wheel_joints = [2, 3]
         self.current_action = np.zeros(2)
         self.prev_action = np.zeros(2)
+        self.prev_distance = 0
         self.difficulty = difficulty
 
     def _setup_simulation(self):
@@ -281,19 +282,19 @@ class RobotNavEnv(gym.Env):
                 for item in self.debug_items:
                     try:
                         p.removeUserDebugItem(item)
-                    except p.error.Warning:
+                    except Exception as e :
                         continue
                 self.debug_items.clear()
                 for obs_id in self.obstacle_ids:
                     try:
                         p.removeBody(obs_id)
-                    except p.error.PhysicsClientError:
+                    except Exception:
                         continue
                 self.obstacle_ids.clear()
                 if self.robot_id is not None:
                     try:
                         p.removeBody(self.robot_id)
-                    except p.error.PhysicsClientError:
+                    except Exception:
                         pass
                 p.disconnect(self.client)
             except Exception as e:

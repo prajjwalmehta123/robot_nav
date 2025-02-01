@@ -171,7 +171,8 @@ def setup_callbacks(env, eval_env, log_dir, config):
 
     early_stopping = EarlyStoppingCallback(
         eval_env=eval_env,
-        max_no_improvement=15,
+        max_no_improvement=30,
+        min_evals=10,
         eval_freq=20000,
         verbose=1
     )
@@ -264,9 +265,17 @@ def cleanup_training(model, env, log_dir):
         # Clear CUDA cache
         if torch.cuda.is_available():
             torch.cuda.empty_cache()
-
+        try:
+            import pybullet as p
+            if p.isConnected():
+                p.disconnect()
+        except Exception as e:
+            print(f"Warning: PyBullet cleanup error: {e}")
         # Close environments
-        env.close()
+        try:
+            env.close()
+        except Exception as e:
+            print(f"Warning: Environment cleanup error: {e}")
 
     except Exception as e:
         print(f"Error during cleanup: {e}")
@@ -275,15 +284,15 @@ def cleanup_training(model, env, log_dir):
         wandb.finish()
 
 
-class EarlyStoppingCallback(EvalCallback):  # Inherit from EvalCallback
+class EarlyStoppingCallback(EvalCallback):
     def __init__(
             self,
             eval_env,
-            max_no_improvement=5,
-            eval_freq=10000,
+            max_no_improvement=30,
+            min_evals=10,
+            eval_freq=20000,
             verbose=0
     ):
-        # Initialize parent EvalCallback
         super().__init__(
             eval_env,
             best_model_save_path=None,
@@ -294,19 +303,31 @@ class EarlyStoppingCallback(EvalCallback):  # Inherit from EvalCallback
             verbose=verbose
         )
         self.max_no_improvement = max_no_improvement
+        self.min_evals = min_evals
         self.no_improvement_count = 0
         self.best_mean_reward = -np.inf
+        self.eval_count = 0
 
     def _on_step(self) -> bool:
-        super()._on_step()
+        continue_training = super()._on_step()
+
+        if continue_training is False:
+            return False
+
+        if self.eval_count < self.min_evals:
+            self.eval_count += 1
+            return True
+
         if self.last_mean_reward > self.best_mean_reward:
             self.best_mean_reward = self.last_mean_reward
             self.no_improvement_count = 0
         else:
             self.no_improvement_count += 1
+
         if self.no_improvement_count >= self.max_no_improvement:
             if self.verbose > 0:
-                print(f"Early stopping triggered after {self.no_improvement_count} evaluations without improvement.")
+                print(f"Early stopping triggered after {self.no_improvement_count} "
+                      f"evaluations without improvement.")
             return False
         return True
 
