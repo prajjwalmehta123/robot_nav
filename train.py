@@ -171,8 +171,8 @@ def setup_callbacks(env, eval_env, log_dir, config):
 
     early_stopping = EarlyStoppingCallback(
         eval_env=eval_env,
-        max_no_improvement=config.max_no_improvement_evals,
-        eval_freq=10000,
+        max_no_improvement=15,
+        eval_freq=20000,
         verbose=1
     )
 

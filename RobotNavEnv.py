@@ -155,7 +155,7 @@ class RobotNavEnv(gym.Env):
             return -150 * (1 + self.difficulty * 0.3)
 
         if distance_to_target < 0.5:
-            return 100 + (self.difficulty * 20)
+            return 300 + (self.difficulty * 50)
 
         total_reward = distance_reward + obstacle_reward
 
@@ -243,7 +243,7 @@ class RobotNavEnv(gym.Env):
         n_obstacles = int(self.difficulty) + 1
         min_spacing = max(1.0, 1.8 - (self.difficulty * 0.1))
         obstacles = []
-        max_attempts =100
+        max_attempts =200
         for _ in range(n_obstacles):
             valid_position = False
             attempts = 0
@@ -283,16 +283,25 @@ class RobotNavEnv(gym.Env):
 
                 # Remove all objects
                 for obs_id in self.obstacle_ids:
-                    p.removeBody(obs_id)
+                    try:
+                        p.removeBody(obs_id)
+                    except p.error.PhysicsClientError:
+                        continue
+                self.obstacle_ids.clear()
+
                 if self.robot_id is not None:
-                    p.removeBody(self.robot_id)
+                    try:
+                        p.removeBody(self.robot_id)
+                    except p.error.PhysicsClientError:
+                        pass
 
                 # Disconnect client
                 p.disconnect(self.client)
-                self.client = None
 
             except p.error.ExperimentalFeatureException as e:
                 print(f"Warning: Error during cleanup: {e}")
+            finally:
+                self.client = None
 
 
 def test_environment():

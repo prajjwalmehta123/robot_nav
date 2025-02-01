@@ -81,6 +81,8 @@ class CurriculumCallback(BaseCallback):
                 )
                 self.eval_env.set_attr('difficulty', new_difficulty)
                 self.training_env.set_attr('difficulty', new_difficulty)
+                self.training_env.reset()
+                self.eval_env.reset()
                 self.last_difficulty_change = self.n_calls
 
             # Clear buffer but keep recent episodes
@@ -97,8 +99,10 @@ class CurriculumCallback(BaseCallback):
             avg_distance
     ):
         """Log detailed metrics about difficulty changes."""
-        print(f"\nBuffer size: {len(self.ep_info_buffer)}")
-        print(f"Recent success rates: {[ep['is_success'] for ep in self.ep_info_buffer[-5:]]}")
+        print(f"\nCurriculum Debug - Buffer Stats:")
+        print(f"Total episodes: {len(self.ep_info_buffer)}")
+        print(f"Success rate: {success_rate:.2%} (Thresholds: +{self.difficulty_threshold}/-{self.difficulty_decrease_threshold})")
+        print(f"Last 5 successes: {[ep['is_success'] for ep in self.ep_info_buffer[-5:]]}")
         if self.verbose > 0:
             change_type = "Increasing" if new_diff > old_diff else "Decreasing"
             print(f"\n{change_type} difficulty from {old_diff:.1f} to {new_diff:.1f}")
