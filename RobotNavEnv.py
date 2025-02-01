@@ -53,29 +53,28 @@ class RobotNavEnv(gym.Env):
     def reset(self, seed=None, options=None):
         super().reset(seed=seed)
         self.current_step = 0
+        self.path_points = []
 
         # Reset simulation
         p.resetSimulation()
         p.setGravity(0, 0, -9.81)
         p.loadURDF("plane.urdf")
-        self.robot_id = p.loadURDF("r2d2.urdf", basePosition=[0, 0, 0.5])
-        self.target_pos = self._generate_target_position()
+        initial_x = np.random.uniform(-0.5, 0.5)
+        initial_y = np.random.uniform(-0.5, 0.5)
+        self.robot_id = p.loadURDF("r2d2.urdf", basePosition=[initial_x, initial_y, 0.5])
+        while True:
+            self.target_pos = self._generate_target_position()
+            dist_to_robot = np.linalg.norm(self.target_pos - np.array([initial_x, initial_y]))
+            if dist_to_robot > 1.5:
+                break
         self._add_obstacles()
-
-        if self.render_mode == "human":
-            p.resetDebugVisualizerCamera(
-                cameraDistance=5,
-                cameraYaw=0,
-                cameraPitch=-45,
-                cameraTargetPosition=[0, 0, 0]
-            )
-            p.addUserDebugLine(
-                [self.target_pos[0], self.target_pos[1], 0],
-                [self.target_pos[0], self.target_pos[1], 1],
-                [1, 0, 0],
-                lineWidth=2
-            )
-        for _ in range(100):
+        robot_pos, _ = p.getBasePositionAndOrientation(self.robot_id)
+        self.prev_distance = np.linalg.norm(
+            np.array([robot_pos[0], robot_pos[1]]) - self.target_pos
+        )
+        self.current_action = np.zeros(2)
+        self.prev_action = np.zeros(2)
+        for _ in range(50):
             p.stepSimulation()
         observation = self._get_observation()
         info = {}
@@ -135,7 +134,7 @@ class RobotNavEnv(gym.Env):
         return distances
 
     def _compute_reward(self):
-        robot_pos, _ = p.getBasePositionAndOrientation(self.robot_id)
+        robot_pos, robot_orn = p.getBasePositionAndOrientation(self.robot_id)
         distance_to_target = np.linalg.norm(
             np.array([robot_pos[0], robot_pos[1]]) - self.target_pos
         )
@@ -143,31 +142,31 @@ class RobotNavEnv(gym.Env):
         lidar_data = self._get_lidar_data()
         min_obstacle_distance = np.min(lidar_data)
 
-        # Base rewards
-        distance_reward = -distance_to_target
-        obstacle_reward = 0
-
-        progress_reward = (self.prev_distance - distance_to_target) * 2.0
+        progress_reward = (self.prev_distance - distance_to_target) * 5.0
         self.prev_distance = distance_to_target
 
-        # Obstacle sensitivity increases with difficulty
+        distance_reward = 1.0 / (1.0 + distance_to_target)
         safe_distance = 1.0 - (self.difficulty * 0.1)
+        obstacle_reward = 0
         if min_obstacle_distance < safe_distance:
-            obstacle_reward = -1.0 * (safe_distance - min_obstacle_distance)
-
+            obstacle_penalty = ((safe_distance - min_obstacle_distance) / safe_distance) ** 2
+            obstacle_reward = -obstacle_penalty * (1 + self.difficulty * 0.2)
         if self._check_collision():
-            return -150 * (1 + self.difficulty * 0.3)
+            return -50 * (1 + self.difficulty * 0.2)
 
         if distance_to_target < 0.5:
-            return 500 + (self.difficulty * 50)
+            completion_bonus = 100 + (20 * self.difficulty)
+            return completion_bonus
 
-        total_reward = progress_reward + distance_reward + obstacle_reward
-
-        action_smoothness = -np.sum(np.abs(self.current_action - self.prev_action))
-        smoothness_factor = 0.3 * (1 + self.difficulty * 0.2)
-        total_reward += smoothness_factor * action_smoothness
-
-        return total_reward
+        action_diff = np.linalg.norm(self.current_action - self.prev_action)
+        smoothness_reward = -0.1 * action_diff
+        total_reward = (
+                progress_reward * 0.5 +
+                distance_reward * 2.0 +
+                obstacle_reward +
+                smoothness_reward
+        )
+        return np.clip(total_reward, -10.0, 10.0)
 
     @property
     def difficulty(self):

@@ -48,52 +48,48 @@ def train_robot(config=None):
         project="robot-navigation",
         config={
             "algorithm": "SAC",
-            "learning_rate": 1e-4,
-            "batch_size": 1024,
+            "learning_rate": 3e-4,  # Adjusted for better initial learning
+            "batch_size": 256,      # Reduced batch size for better initial training
             "buffer_size": 1000000,
-            "learning_starts": 25000,
-            "train_freq": 1,
-            "gradient_steps": 2,
-            "ent_coef": "auto",
+            "learning_starts": 5000, # Reduced to start learning earlier
+            "train_freq": (1, "episode"),  # Train every episode
+            "gradient_steps": 1,
+            "ent_coef": "auto_0.1",  # Start with higher entropy for exploration
             "total_timesteps": 4_000_000,
-            "gradient_clip": 0.5,  # Added gradient clipping
+            "tau": 0.02,  # Slower target network update
+            "gamma": 0.98,  # Slightly reduced discount factor
             "policy_kwargs": {
                 "net_arch": {
-                    "pi": [512, 512, 256],
-                    "qf": [512, 512, 256]
+                    "pi": [256, 256],  # Simplified network architecture
+                    "qf": [256, 256]
                 },
+                "optimizer_class": torch.optim.AdamW,  # Using AdamW
                 "optimizer_kwargs": {
-                    "weight_decay": 1e-5
+                    "weight_decay": 1e-5,
+                    "eps": 1e-5
                 }
             },
-            "checkpoint_freq": 100000,  # Save every 100k steps
-            "max_no_improvement_evals": 10,  # Early stopping patience
+            "checkpoint_freq": 50000,
+            "max_no_improvement_evals": 50,  # Increased patience
         }
     )
 
-    # Setup device with proper error handling
     device = setup_cuda()
-
-    # Create log directory with timestamp
     timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
     log_dir = f"logs/{run.name}_{timestamp}/"
     os.makedirs(log_dir, exist_ok=True)
 
-    # Create and normalize environments
-    env, eval_env = create_envs(log_dir)
-
-    # Setup callbacks with early stopping
+    # Create environments with modified parameters
+    env, eval_env = create_envs(log_dir, run.config)
     callbacks = setup_callbacks(env, eval_env, log_dir, run.config)
-
-    # Initialize or load model
     model = load_or_create_model(env, device, log_dir, run.config)
 
-    # Train with proper error handling and cleanup
     try:
         model.learn(
             total_timesteps=run.config.total_timesteps,
             callback=callbacks,
-            progress_bar=True
+            progress_bar=True,
+            tb_log_name="SAC"
         )
     except KeyboardInterrupt:
         print("\nTraining interrupted. Saving checkpoint...")
@@ -101,29 +97,27 @@ def train_robot(config=None):
         print(f"\nError during training: {e}")
         raise
     finally:
-        # Save final model and cleanup
         cleanup_training(model, env, log_dir)
 
-def create_envs(log_dir):
-    """Create training and eval environments with proper normalization."""
-    env = DummyVecEnv([make_env(difficulty=0, seed=i) for i in range(4)])
+def create_envs(log_dir, config):
+    """Create training and eval environments with improved normalization."""
+    env = DummyVecEnv([make_env(difficulty=0, seed=i) for i in range(2)])  # Reduced parallel envs
     env = VecNormalize(
         env,
         norm_obs=True,
         norm_reward=True,
         clip_obs=10.,
         clip_reward=10.,
-        gamma=0.99
+        gamma=config.gamma,
+        epsilon=1e-8  # Added epsilon for numerical stability
     )
 
     eval_env = DummyVecEnv([make_env(difficulty=0, eval_env=True)])
     eval_env = VecNormalize(
         eval_env,
-        norm_obs=env.norm_obs,
-        norm_reward=env.norm_reward,
-        gamma=env.gamma,
-        clip_obs=env.clip_obs,
-        clip_reward=env.clip_reward,
+        norm_obs=True,
+        norm_reward=False,  # Don't normalize rewards for evaluation
+        gamma=config.gamma,
         training=False
     )
 
@@ -133,25 +127,26 @@ def create_envs(log_dir):
 
     return env, eval_env
 
-
 def setup_callbacks(env, eval_env, log_dir, config):
-    """Setup training callbacks with early stopping."""
+    """Setup training callbacks with improved parameters."""
+    # Evaluation callback with more lenient parameters
     eval_callback = EvalCallback(
         eval_env,
         best_model_save_path=f"{log_dir}/best_model",
         log_path=f"{log_dir}/results",
-        eval_freq=10000,
-        n_eval_episodes=10,
+        eval_freq=5000,         # More frequent evaluation
+        n_eval_episodes=5,      # Fewer evaluation episodes
         deterministic=True,
         render=False
     )
 
+    # Modified curriculum callback
     curriculum_callback = CurriculumCallback(
         eval_env=eval_env,
-        difficulty_threshold=0.75,
-        difficulty_decrease_threshold=0.4,
-        check_freq=20000,
-        min_episodes=50,
+        difficulty_threshold=0.6,
+        difficulty_decrease_threshold=0.3,
+        check_freq=10000,           # More frequent checks
+        min_episodes=20,            # Fewer required episodes
         verbose=1
     )
 
@@ -164,25 +159,15 @@ def setup_callbacks(env, eval_env, log_dir, config):
 
     wandb_callback = WandbCallback(
         gradient_save_freq=100,
-        model_save_freq=config.checkpoint_freq,
         model_save_path=f"{log_dir}/wandb_checkpoints",
         verbose=2
-    )
-
-    early_stopping = EarlyStoppingCallback(
-        eval_env=eval_env,
-        max_no_improvement=30,
-        min_evals=10,
-        eval_freq=20000,
-        verbose=1
     )
 
     return CallbackList([
         eval_callback,
         curriculum_callback,
         checkpoint_callback,
-        wandb_callback,
-        early_stopping
+        wandb_callback
     ])
 
 
