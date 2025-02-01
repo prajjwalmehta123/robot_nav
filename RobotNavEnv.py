@@ -146,6 +146,9 @@ class RobotNavEnv(gym.Env):
         distance_reward = -distance_to_target
         obstacle_reward = 0
 
+        progress_reward = (self.prev_distance - distance_to_target) * 2.0
+        self.prev_distance = distance_to_target
+
         # Obstacle sensitivity increases with difficulty
         safe_distance = 1.0 - (self.difficulty * 0.1)
         if min_obstacle_distance < safe_distance:
@@ -155,9 +158,9 @@ class RobotNavEnv(gym.Env):
             return -150 * (1 + self.difficulty * 0.3)
 
         if distance_to_target < 0.5:
-            return 300 + (self.difficulty * 50)
+            return 500 + (self.difficulty * 50)
 
-        total_reward = distance_reward + obstacle_reward
+        total_reward = progress_reward + distance_reward + obstacle_reward
 
         action_smoothness = -np.sum(np.abs(self.current_action - self.prev_action))
         smoothness_factor = 0.3 * (1 + self.difficulty * 0.2)
@@ -272,38 +275,31 @@ class RobotNavEnv(gym.Env):
                 return False
         return True
 
-
     def close(self):
         if self.client is not None:
             try:
-                # Clean up debug items
                 for item in self.debug_items:
-                    p.removeUserDebugItem(item)
+                    try:
+                        p.removeUserDebugItem(item)
+                    except p.error.Warning:
+                        continue
                 self.debug_items.clear()
-
-                # Remove all objects
                 for obs_id in self.obstacle_ids:
                     try:
                         p.removeBody(obs_id)
                     except p.error.PhysicsClientError:
                         continue
                 self.obstacle_ids.clear()
-
                 if self.robot_id is not None:
                     try:
                         p.removeBody(self.robot_id)
                     except p.error.PhysicsClientError:
                         pass
-
-                # Disconnect client
                 p.disconnect(self.client)
-
-            except p.error.ExperimentalFeatureException as e:
+            except Exception as e:
                 print(f"Warning: Error during cleanup: {e}")
             finally:
                 self.client = None
-
-
 def test_environment():
     env = RobotNavEnv(render_mode="human")
 
