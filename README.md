@@ -1,135 +1,130 @@
-# Robot Navigation with Reinforcement Learning
+# 🤖 Autonomous Robot Navigation with Deep RL
 
-This project implements a reinforcement learning system for autonomous robot navigation using PyBullet physics simulation. The robot learns to navigate through environments with obstacles while reaching target positions using LiDAR-based sensing.
+A robust reinforcement learning system that teaches robots to navigate complex environments autonomously. The project uses PyBullet physics simulation and implements the Soft Actor-Critic (SAC) algorithm to train a robot to reach target positions while avoiding obstacles.
 
-## Features
+## 🌟 Key Features
 
-- Physics-based robot simulation using PyBullet
-- Custom OpenAI Gym environment for robot navigation
-- LiDAR-based obstacle detection and avoidance
-- Soft Actor-Critic (SAC) implementation using Stable-Baselines3
-- Curriculum learning with increasing difficulty levels
-- Weights & Biases integration for experiment tracking
-- Comprehensive visualization tools for debugging and demonstration
+- **Physics-Based Simulation**: Realistic robot dynamics using PyBullet
+- **Advanced Sensing**: 360° LiDAR-based obstacle detection
+- **Intelligent Learning**: SAC implementation with automatic curriculum progression
+- **Performance Tracking**: Comprehensive metrics and visualization through Weights & Biases
+- **Adaptable Difficulty**: Six progressive difficulty levels for robust learning
+- **Real-Time Visualization**: Debug tools and performance monitoring
 
-## Project Structure
+## 🚀 Quick Start
 
-- `RobotNavEnv.py`: Custom Gym environment implementation
-- `train.py`: Main training script with curriculum learning and W&B integration
-- `eval.py`: Policy evaluation script
-- `visualize.py`: Visualization tools for trained policies
-- `sim_setup.py`: Basic simulation setup and testing
-- `sweep.yml`: Hyperparameter optimization configuration
+### Prerequisites
 
-## Requirements
-
-```
-gymnasium
-numpy
-pybullet
-stable-baselines3
-wandb
+```bash
+pip install gymnasium numpy pybullet stable-baselines3 wandb
 ```
 
-## Environment Description
+### Training
 
-The environment consists of:
-- R2D2 robot with differential drive control
-- 360-degree LiDAR sensor
-- Randomly placed obstacles
-- Target position marked with a red line
-
-### Observation Space
-- 360 LiDAR readings (distances from 0 to 5 meters)
-- 2D relative target position
-
-### Action Space
-- 2D continuous action space: [linear_velocity, angular_velocity]
-- Values normalized between -1 and 1
-
-### Reward Structure
-- Distance-based reward for approaching target
-- Penalty for obstacle proximity (scales with difficulty)
-- Large positive reward for reaching target
-- Large negative reward for collisions
-- Action smoothness reward
-
-## Training
-
-The training system features:
-- Curriculum learning with 6 difficulty levels (0-5)
-- Automatic difficulty progression based on success rate
-- Integration with Weights & Biases for experiment tracking
-- Hyperparameter optimization using W&B sweeps
-
-To start training:
+1. Start a new training session:
 ```bash
 python train.py
 ```
 
-For hyperparameter optimization:
+2. Run hyperparameter optimization:
 ```bash
 wandb sweep sweep.yml
 wandb agent [sweep_id]
 ```
 
-## Evaluation
+3. Monitor training progress in real-time through Weights & Biases dashboard.
 
-To evaluate a trained policy:
+### Evaluation
+
+Test your trained model:
 ```bash
 python eval.py
 ```
 
-The evaluation script provides:
-- Success rate statistics
-- Collision rate analysis
-- Average episode rewards and lengths
-- Optional visualization of the robot's behavior
+## 🎮 Environment Details
 
-## Visualization
+### Robot Configuration
+- Platform: R2D2-style robot with differential drive
+- Sensors: 360° LiDAR (range: 0-5 meters)
+- Control: Continuous action space for linear and angular velocities
 
-The visualization tool provides:
-- Real-time path tracking
-- LiDAR data visualization
-- Episode success/failure statistics
+### Training Process
+The environment implements curriculum learning with 6 difficulty levels (0-5):
 
-To run the visualization:
-```bash
-python visualize.py
+| Level | Features |
+|-------|----------|
+| 0 | Basic navigation, few obstacles |
+| 1 | Increased obstacle count |
+| 2 | Larger obstacles, longer distances |
+| 3 | Complex obstacle arrangements |
+| 4 | Tight navigation constraints |
+| 5 | Maximum difficulty with all challenges |
+
+### Reward Structure
+- **Positive Rewards**:
+  - Progress toward target
+  - Reaching final destination
+  - Maintaining safe distances from obstacles
+  - Smooth motion control
+
+- **Negative Rewards**:
+  - Collisions with obstacles
+  - Excessive proximity to obstacles
+  - Jerky movements
+
+## 📊 Performance Metrics
+
+The system tracks multiple performance indicators:
+- Success rate per difficulty level
+- Collision frequency
+- Average episode length
+- Navigation efficiency
+- Learning curve progression
+
+## 🛠️ Project Structure
+
+```
+├── RobotNavEnv.py      # Core environment implementation
+├── train.py            # Training orchestration
+├── eval.py            # Evaluation and metrics
+├── callbacks.py       # Training callbacks and monitoring
+└── sweep.yml         # Hyperparameter configuration
 ```
 
-## Curriculum Learning
+## 🔧 Customization
 
-The environment difficulty increases progressively based on:
-- Number of obstacles (2 to 7)
-- Obstacle size (0.5 to 1.0 scale)
-- Target distance (2 to 7 meters)
-- Reward/penalty scaling
-- Safe distance thresholds
+### Environment Parameters
+- `difficulty`: Controls obstacle count, size, and placement (0-5)
+- `render_mode`: "human" for visualization, None for training
+- `max_steps`: Maximum episode duration
 
-## Performance Metrics
+### Training Configuration
+- Learning rate and batch size
+- Network architecture
+- Reward scaling
+- Curriculum progression thresholds
 
-The system tracks:
-- Episode rewards
-- Success rates
-- Collision rates
-- Average episode lengths
-- Learning curves
-- Policy performance across difficulty levels
+## 📈 Results
 
-## Dependencies
+The Performance of the RL model is not something which is great, as the difficulty of the environment increases,
+the success rate drops drastically. This is not ideal, and it suggest that my jump from 0 to 1 difficulty is too drastic, 
 
-- Python 3.7+
-- PyBullet for physics simulation
-- Stable-Baselines3 for RL algorithms
-- Weights & Biases for experiment tracking
-- Gymnasium for environment interface
-- NumPy for numerical computations
+Wandb Link - https://wandb.ai/prajjwalmehta123/robot-navigation?nw=nwuserpm8607
 
-## Future Improvements
 
-- Dynamic obstacle movement
-- More complex environment geometries
-- Multi-robot scenarios
-- Additional sensor modalities
-- Real-robot deployment capabilities
+![Results](../analysis.png)
+
+
+## Key Future TODO:
+- [ ] Implement curriculum learning with smaller difficulty increments
+- [ ] Add intermediate reward shaping for better obstacle avoidance
+- [ ] Consider adjusting the reward structure to better balance exploration and safety
+- [ ] The robot might benefit from a more conservative initial approach with gradual speed increases
+
+## 🙏 Acknowledgments
+
+Built with:
+- [PyBullet](https://pybullet.org/) - Physics simulation
+- [Stable-Baselines3](https://stable-baselines3.readthedocs.io/) - RL algorithms
+- [Weights & Biases](https://wandb.ai/) - Experiment tracking
+- [Gymnasium](https://gymnasium.farama.org/) - Environment framework
