@@ -112,7 +112,7 @@ the success rate drops drastically. This is not ideal, and it suggest that my ju
 Wandb Link - https://wandb.ai/prajjwalmehta123/robot-navigation?nw=nwuserpm8607
 
 
-![Results](../analysis.png)
+![Results](./models/analysis.png)
 
 
 ## Key Future TODO:
